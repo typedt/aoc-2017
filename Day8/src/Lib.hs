@@ -7,12 +7,15 @@ import qualified Data.Map.Strict as M
 import Data.List (maximum)
 
 part1 :: String -> Int
-part1 = maximum . M.elems . foldl applyIns M.empty . map (unEither . parse parser "") . lines
+part1 = maximum . M.elems . fst . processed
 
 part2 :: String -> Int
-part2 = snd . foldl applyIns' (M.empty, minBound :: Int) . map (unEither . parse parser "") . lines
+part2 = snd . processed
 
 data Instruction = Ins {getReg :: String, getOp :: Int -> Int, getPred :: (String, Int -> Bool)}
+
+processed :: String -> (M.Map String Int, Int)
+processed = foldl applyIns (M.empty, minBound :: Int) . map (unEither . parse parser "") . lines
 
 parser :: Parser Instruction
 parser = Ins <$> reg <*> op <*> predicate
@@ -41,21 +44,13 @@ parser = Ins <$> reg <*> op <*> predicate
 unEither :: Either ParseError a -> a
 unEither = either (const undefined) id
 
-applyIns :: M.Map String Int -> Instruction -> M.Map String Int
-applyIns m (Ins this op (that, p)) = if satisfies then M.alter f this m else m
+applyIns :: (M.Map String Int, Int) -> Instruction -> (M.Map String Int, Int)
+applyIns (m, h) (Ins this op (that, p)) = if satisfies then (m', h') else (m, h)
   where
-    f (Just v) = Just $ op v
-    f Nothing = Just $ op 0
     satisfies = p (M.findWithDefault 0 that m)
-
-applyIns' :: (M.Map String Int, Int) -> Instruction -> (M.Map String Int, Int)
-applyIns' (m, h) (Ins this op (that, p)) = if satisfies then (m', h') else (m, h)
-  where
-    satisfies = p (M.findWithDefault 0  that m)
-    h' = if new > h then new else h
-    m' = M.alter f this m
-    value = M.lookup this m
-    new = case value of
+    new = case M.lookup this m of
             Just v -> op v
             Nothing -> op 0
+    h' = max new h
+    m' = M.alter f this m
     f _ = Just new
